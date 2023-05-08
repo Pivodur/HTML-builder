@@ -11,7 +11,7 @@ async function mergeCss() {
     const stylesFiles = await fs.promises.readdir(stylesFolder, {
       withFileTypes: true,
     });
-    const destFile = fs.createWriteStream(path.join(projectDist, "styles.css"));
+    const destFile = fs.createWriteStream(path.join(projectDist, "style.css"));
     for (const file of stylesFiles) {
       if (!file.isDirectory() && path.extname(file.name) == ".css") {
         const readFile = fs.createReadStream(
@@ -80,22 +80,73 @@ async function deleteAssets(source, destination) {
   }
 }
 
-
 async function buildHtml() {
   try {
+    // Создаем index.html и stream
+    const templatePath = path.join(__dirname, "template.html");
+    const targetPath = path.join(projectDist, "index.html");
+    const targetStream = fs.createWriteStream(targetPath);
+    // await fs.promises.copyFile(templatePath, targetPath);
+
+    // Создание потока чтения для index.html
+    const templateReadStream = fs.createReadStream(templatePath, "utf-8");
+    let templateText = "";
+
+    templateReadStream.on("data", chunk => {
+      templateText += chunk;
+    });
+
+    await new Promise(resolve => {
+      templateReadStream.on("end", () => {
+        resolve();
+      });
+    });
+
+    // Считываем папку components
+    const componentsPath = path.join(__dirname, "components");
+    const components = await fs.promises.readdir(componentsPath);
+    const componentsInfo = components.map(file => path.parse(file));
+
+    // Запись шаблонов в index.html
+    for (const item of componentsInfo) {
+      const componentReadStream = fs.createReadStream(
+        path.join(componentsPath, item.base),
+        "utf-8"
+      );
+      let componentText = "";
+
+      componentReadStream.on("data", chunk => {
+        componentText += chunk;
+      });
+
+      await new Promise(resolve => {
+        componentReadStream.on("end", () => {
+          resolve();
+        });
+      });
+
+      templateText = templateText.replace(`{{${item.name}}}`, componentText);
+    }
+    targetStream.write(templateText)
+
+
   } catch (error) {
-    console.log("error in html builder");
+    console.log("error in html builder", error);
   }
 }
+
+
 
 async function buildPage() {
   try {
+    await fs.promises.mkdir(projectDist, { recursive: true });
     await mergeCss();
+    await copyAssets(assetsSrcFolder, assetsDestFolder);
+    await deleteAssets(assetsSrcFolder, assetsDestFolder);
+    await buildHtml();
   } catch (error) {
-    console.log("error in build page:", error);
+    console.log("buildPage error", error);
   }
 }
 
-fs.mkdir(projectDist, { recursive: true }, () => {
-  deleteAssets(assetsSrcFolder, assetsDestFolder);
-});
+buildPage()
