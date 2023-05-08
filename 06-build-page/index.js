@@ -51,15 +51,23 @@ async function copyAssets(source, destination) {
 async function deleteAssets(source, destination) {
   try {
     const sourceInner = await fs.promises.readdir(source);
+    console.log("sourceInner", sourceInner);
     const destInner = await fs.promises.readdir(destination);
+    console.log("destInner", destInner);
 
     for (const item of destInner) {
+      console.log(item);
+      const itemPath = path.join(destination, item);
+      const itemStat = await fs.promises.stat(itemPath);
       if (!sourceInner.includes(item)) {
-        // console.log(item);
-        const deletedItem = path.join(destination, item);
-        await fs.unlink(deletedItem);
-        // continue;
-      } else if (await fs.stat(item).isDirectory()) {
+        // console.log(itemPath);
+        if (itemStat.isDirectory()) {
+          await fs.promises.rmdir(itemPath, { recursive: true });
+        } else {
+          await fs.promises.unlink(itemPath);
+        }
+      } else if (itemStat.isDirectory()) {
+        console.log("directory", item);
         const newSource = path.join(source, item);
         const newDest = path.join(destination, item);
         await deleteAssets(newSource, newDest);
@@ -68,7 +76,7 @@ async function deleteAssets(source, destination) {
     }
 
   } catch (error) {
-    console.log();
+    console.log("delete assets error", error);
   }
 }
 
@@ -89,5 +97,5 @@ async function buildPage() {
 }
 
 fs.mkdir(projectDist, { recursive: true }, () => {
-  compareDirectories(assetsSrcFolder, assetsDestFolder);
+  deleteAssets(assetsSrcFolder, assetsDestFolder);
 });
